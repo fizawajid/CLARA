@@ -32,24 +32,30 @@ A production-grade multi-agent AI system for feedback analysis using LangChain, 
 ### Local Development
 
 1. **Create virtual environment**
-```bash
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+```powershell
+python -m venv .venv
+# Activate on Windows PowerShell:
+.venv\Scripts\Activate.ps1
+# Or on Unix/Mac:
+# source .venv/bin/activate
 ```
 
 2. **Install dependencies**
-```bash
+```powershell
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 ```
 
 3. **Create .env file** (copy from .env.example)
-```bash
-cp .env.example .env
+```powershell
+# Windows PowerShell:
+Copy-Item .env.example .env
+# Or on Unix/Mac:
+# cp .env.example .env
 ```
 
 4. **Run the application**
-```bash
+```powershell
 python -m uvicorn src.api.main:app --reload
 ```
 

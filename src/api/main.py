@@ -6,6 +6,7 @@ from typing import Dict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api.routes import router as api_router
 from src.utils.config import get_config
 from src.utils.logging_config import get_logger, setup_logging
 
@@ -76,6 +77,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include API routes
+app.include_router(api_router)
 
 
 @app.get("/")
