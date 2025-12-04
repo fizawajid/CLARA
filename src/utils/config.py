@@ -6,11 +6,12 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ModelConfig(BaseSettings):
     """Model configuration."""
+    model_config = SettingsConfigDict(env_prefix='', extra='ignore')
 
     embedding_model: str = Field(default="sentence-transformers/all-MiniLM-L6-v2")
     spacy_model: str = Field(default="en_core_web_sm")
@@ -19,13 +20,15 @@ class ModelConfig(BaseSettings):
 
 class ChromaDBConfig(BaseSettings):
     """ChromaDB configuration."""
+    model_config = SettingsConfigDict(env_prefix='CHROMA_', extra='ignore')
 
-    persist_directory: str = Field(default="./chroma_db")
+    persist_directory: str = Field(default="./chroma_db", alias='persist_dir')
     collection_name: str = Field(default="feedback_embeddings")
 
 
 class APIConfig(BaseSettings):
     """API configuration."""
+    model_config = SettingsConfigDict(env_prefix='API_', extra='ignore')
 
     title: str = Field(default="NLP Agentic AI Feedback Analysis System")
     description: str = Field(default="Multi-agent system for feedback analysis")
@@ -38,6 +41,7 @@ class APIConfig(BaseSettings):
 
 class AgentConfig(BaseSettings):
     """Agent configuration."""
+    model_config = SettingsConfigDict(env_prefix='AGENT_', extra='ignore')
 
     max_retries: int = Field(default=3)
     timeout: int = Field(default=300)
@@ -46,6 +50,7 @@ class AgentConfig(BaseSettings):
 
 class NLPConfig(BaseSettings):
     """NLP processing configuration."""
+    model_config = SettingsConfigDict(env_prefix='', extra='ignore')
 
     min_topic_size: int = Field(default=5)
     max_topics: int = Field(default=10)
@@ -55,16 +60,23 @@ class NLPConfig(BaseSettings):
 
 class LoggingConfig(BaseSettings):
     """Logging configuration."""
+    model_config = SettingsConfigDict(env_prefix='LOG_', extra='ignore')
 
     level: str = Field(default="INFO")
     format: str = Field(default="json")
-    log_file: str = Field(default="./logs/app.log")
+    log_file: str = Field(default="./logs/app.log", alias='file')
     max_file_size: int = Field(default=10485760)
     backup_count: int = Field(default=5)
 
 
 class Config(BaseSettings):
     """Main configuration class."""
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra='ignore',  # Ignore extra environment variables
+        case_sensitive=False
+    )
 
     models: ModelConfig = Field(default_factory=ModelConfig)
     chromadb: ChromaDBConfig = Field(default_factory=ChromaDBConfig)
@@ -72,10 +84,6 @@ class Config(BaseSettings):
     agents: AgentConfig = Field(default_factory=AgentConfig)
     nlp: NLPConfig = Field(default_factory=NLPConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 def load_config(config_path: Optional[str] = None) -> Config:
@@ -98,8 +106,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
         with open(config_path, "r") as f:
             config_dict = yaml.safe_load(f) or {}
 
-    # Create configuration object
-    # Environment variables will override YAML values
+    # Create sub-configurations with both YAML and env var support
     models = ModelConfig(**config_dict.get("models", {}))
     chromadb = ChromaDBConfig(**config_dict.get("chromadb", {}))
     api = APIConfig(**config_dict.get("api", {}))
