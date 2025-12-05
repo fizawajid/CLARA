@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import spacy
+import pytextrank
 from bertopic import BERTopic
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
@@ -230,12 +231,6 @@ class TextSummarizer:
     """spaCy + TextRank based text summarization service."""
 
     def __init__(self, model_name: Optional[str] = None):
-        """
-        Initialize text summarizer.
-
-        Args:
-            model_name: spaCy model name
-        """
         config = get_config()
         self.model_name = model_name or config.models.spacy_model
         self.summary_ratio = config.nlp.summary_ratio
@@ -243,9 +238,8 @@ class TextSummarizer:
         logger.info(f"Loading spaCy model: {self.model_name}")
         try:
             self.nlp = spacy.load(self.model_name)
-            # Add TextRank to the pipeline
-            self.nlp.add_pipe("textrank")
-            logger.info("Text summarizer ready with TextRank")
+            self.nlp.add_pipe("textrank")  # <- correct
+            logger.info("Text summarizer ready with PyTextRank")
         except Exception as e:
             logger.error(f"Error loading spaCy model: {str(e)}")
             raise
