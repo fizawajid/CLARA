@@ -1,5 +1,5 @@
 """
-System Page - Health Status and Configuration
+System Page - Health Status and Configuration (FIXED)
 """
 
 import streamlit as st
@@ -22,6 +22,8 @@ with col2:
     auto_refresh = st.checkbox("Auto-refresh", value=False, help="Refresh every 10 seconds")
 
 if auto_refresh:
+    import time
+    time.sleep(10)
     st.rerun()
 
 # ====================
@@ -48,33 +50,50 @@ try:
 
     with col2:
         embed_status = health.get('embedding_service', 'unknown')
-        if embed_status == 'healthy':
+        if embed_status == 'operational':
             st.success(f"✅ **Embeddings:** {embed_status.upper()}")
         else:
             st.warning(f"⚠️ **Embeddings:** {embed_status.upper()}")
 
     with col3:
         vector_status = health.get('vector_store', 'unknown')
-        if vector_status == 'healthy':
+        if vector_status == 'operational':
             st.success(f"✅ **Vector Store:** {vector_status.upper()}")
         else:
             st.warning(f"⚠️ **Vector Store:** {vector_status.upper()}")
 
-    # Document count
-    doc_count = health.get('document_count', 0)
+    # Document count - handle both string and int
+    doc_count_raw = health.get('document_count', 0)
+    
+    # Convert to int if it's a string
+    try:
+        if isinstance(doc_count_raw, str):
+            doc_count = int(doc_count_raw)
+        else:
+            doc_count = doc_count_raw
+    except (ValueError, TypeError):
+        doc_count = 0
+    
     st.metric("Total Documents in Vector Store", format_large_number(doc_count))
 
     # Last updated
     st.caption(f"Last checked: {format_timestamp(datetime.now().isoformat(), '%Y-%m-%d %H:%M:%S')}")
 
 except Exception as e:
-    st.error(f"❌ Unable to connect to API: {str(e)}")
+    st.error(f"❌ Unable to connect to API")
+    st.code(str(e))
+    
     st.markdown("""
     **Troubleshooting:**
     - Ensure the API server is running on http://localhost:8000
     - Check if all dependencies are installed
     - Verify network connectivity
+    - Check the terminal for API error messages
     """)
+    
+    # Show more details
+    with st.expander("🔍 Error Details"):
+        st.exception(e)
 
 st.markdown("---")
 
@@ -90,7 +109,14 @@ try:
     if stats is None:
         # Fetch fresh stats
         with st.spinner("Fetching statistics..."):
-            stats = api_client.get_statistics()
+            response = api_client.get_statistics()
+            
+            # Extract statistics from response
+            if response.get('success'):
+                stats = response.get('statistics', {})
+            else:
+                stats = {}
+            
             update_system_stats(stats)
 
     # Display statistics
@@ -103,9 +129,12 @@ try:
 
     with col2:
         st.markdown("**Database Statistics**")
-        if isinstance(stats, dict):
+        if isinstance(stats, dict) and stats:
             total_docs = stats.get('total_documents', 0)
             st.metric("Total Documents", format_large_number(total_docs))
+            
+            collection_name = stats.get('collection_name', 'N/A')
+            st.caption(f"Collection: {collection_name}")
         else:
             st.caption("Statistics not available")
 
@@ -126,44 +155,49 @@ try:
 
     with col1:
         st.markdown("**API Configuration**")
+        
+        api_info = info.get('api', {})
         st.code(f"""
-Title: {info.get('title', 'N/A')}
-Version: {info.get('version', 'N/A')}
-Description: {info.get('description', 'N/A')}
-        """, language="text")
+Title: {api_info.get('title', 'N/A')}
+Version: {api_info.get('version', 'N/A')}
+Description: {api_info.get('description', 'N/A')}
+        """.strip(), language="text")
 
     with col2:
         st.markdown("**Model Information**")
-        if 'models' in info:
-            models = info['models']
-            st.code(f"""
-Embedding Model: {models.get('embedding_model', 'N/A')}
-spaCy Model: {models.get('spacy_model', 'N/A')}
-Embedding Dimension: {models.get('embedding_dimension', 'N/A')}
-            """, language="text")
+        
+        embed_info = info.get('embedding_service', {})
+        st.code(f"""
+Model: {embed_info.get('model_name', 'N/A')}
+Dimension: {embed_info.get('embedding_dimension', 'N/A')}
+Max Sequence: {embed_info.get('max_seq_length', 'N/A')}
+        """.strip(), language="text")
 
-    # ChromaDB info
-    if 'chromadb' in info:
+    # Vector Store info
+    vector_info = info.get('vector_store', {})
+    if vector_info:
         st.markdown("**Vector Store Configuration**")
-        chroma = info['chromadb']
         st.code(f"""
-Collection: {chroma.get('collection_name', 'N/A')}
-Persist Directory: {chroma.get('persist_directory', 'N/A')}
-        """, language="text")
+Collection: {vector_info.get('collection_name', 'N/A')}
+Documents: {format_large_number(vector_info.get('document_count', 0))}
+Directory: {vector_info.get('persist_directory', 'N/A')}
+        """.strip(), language="text")
 
-    # NLP Configuration
-    if 'nlp_config' in info:
+    # Configuration
+    config_info = info.get('configuration', {})
+    if config_info:
         st.markdown("**NLP Configuration**")
-        nlp_config = info['nlp_config']
         st.code(f"""
-Min Topic Size: {nlp_config.get('min_topic_size', 'N/A')}
-Max Topics: {nlp_config.get('max_topics', 'N/A')}
-Sentiment Threshold: {nlp_config.get('sentiment_threshold', 'N/A')}
-Summary Ratio: {nlp_config.get('summary_ratio', 'N/A')}
-        """, language="text")
+Log Level: {config_info.get('log_level', 'N/A')}
+Agent Timeout: {config_info.get('agent_timeout', 'N/A')}s
+Max Topics: {config_info.get('max_topics', 'N/A')}
+        """.strip(), language="text")
 
 except Exception as e:
     st.warning(f"Unable to fetch system information: {str(e)}")
+    
+    with st.expander("🔍 Error Details"):
+        st.exception(e)
 
 st.markdown("---")
 
@@ -178,6 +212,7 @@ with col1:
     if st.button("🔄 Refresh Status", use_container_width=True):
         # Clear cache and refresh
         st.session_state.system_stats = None
+        st.session_state.last_stats_fetch = None
         st.rerun()
 
 with col2:
@@ -185,20 +220,21 @@ with col2:
         if st.session_state.get('confirm_clear', False):
             from src.ui.utils.session_state import clear_all_data
             clear_all_data()
-            st.success("Session data cleared!")
+            st.success("✅ Session data cleared!")
+            st.session_state.confirm_clear = False
             st.rerun()
         else:
             st.session_state.confirm_clear = True
-            st.warning("Click again to confirm")
+            st.warning("⚠️ Click again to confirm")
 
 with col3:
-    if st.button("📊 View API Docs", use_container_width=True):
-        st.markdown("[Open API Documentation](http://localhost:8000/docs)")
+    st.link_button("📊 View API Docs", "http://localhost:8000/docs", use_container_width=True)
 
-# Reset confirm state
-if 'confirm_clear' in st.session_state and not st.button("Cancel Clear", key="cancel_clear"):
-    if st.session_state.confirm_clear:
+# Reset confirm state if user navigates away
+if st.session_state.get('confirm_clear', False):
+    if st.button("❌ Cancel Clear", key="cancel_clear"):
         st.session_state.confirm_clear = False
+        st.rerun()
 
 st.markdown("---")
 
@@ -207,7 +243,7 @@ st.markdown("---")
 # ====================
 st.subheader("🔌 Connection Information")
 
-st.code(f"""
+st.code("""
 API Base URL: http://localhost:8000
 Streamlit UI: http://localhost:8501
 
@@ -217,9 +253,43 @@ API Endpoints:
 - Upload: POST /api/v1/upload
 - Analyze: POST /api/v1/analyze
 - Process: POST /api/v1/process
+- Feedback: GET /api/v1/feedback/{id}
 - Statistics: GET /api/v1/statistics
-""", language="text")
+
+Interactive API Docs:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+""".strip(), language="text")
+
+# Test Connection Button
+if st.button("🧪 Test API Connection", type="secondary"):
+    with st.spinner("Testing connection..."):
+        try:
+            health = api_client.get_health()
+            if health.get('status') == 'healthy':
+                st.success("✅ API connection successful!")
+                st.json(health)
+            else:
+                st.warning("⚠️ API responded but may have issues")
+                st.json(health)
+        except Exception as e:
+            st.error("❌ API connection failed")
+            st.code(str(e))
+
+st.markdown("---")
 
 # Footer
-st.markdown("---")
 st.caption("CLARA NLP v1.0.0 - Multi-Agent Feedback Analysis System")
+
+# Debug section
+with st.expander("🔧 Debug Information"):
+    st.markdown("**Session State:**")
+    st.json({
+        "uploaded_feedback_count": len(st.session_state.uploaded_feedback_ids),
+        "analysis_count": len(st.session_state.analysis_history),
+        "has_current_analysis": st.session_state.current_analysis is not None,
+        "api_client_initialized": st.session_state.api_client is not None
+    })
+    
+    st.markdown("**API Client Base URL:**")
+    st.code(st.session_state.api_client.base_url)

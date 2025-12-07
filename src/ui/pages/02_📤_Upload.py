@@ -1,8 +1,9 @@
 """
-Upload Page - Feedback Submission Interface
+Upload Page - Feedback Submission Interface (FIXED)
 """
 
 import streamlit as st
+import time
 from src.ui.utils.session_state import initialize_session_state, add_uploaded_feedback, clear_upload_data
 from src.ui.components.upload_handlers import (
     handle_text_input,
@@ -68,43 +69,55 @@ with tab1:
                     'method': 'text'
                 }
 
-                # Upload button
-                st.markdown("---")
-
-                if st.button("📤 Upload to System", type="primary", use_container_width=True):
-                    try:
-                        api_client = st.session_state.api_client
-
-                        with st.spinner("Uploading feedback..."):
-                            response = api_client.upload_feedback(
-                                feedback=feedback_list,
-                                metadata=metadata_list if any(metadata_list) else None
-                            )
-
-                            if response.get('status') == 'success':
-                                feedback_id = response.get('feedback_id')
-                                count = response.get('count')
-                                timestamp = response.get('timestamp')
-
-                                # Add to session state
-                                add_uploaded_feedback(feedback_id, count, timestamp)
-
-                                st.success(f"✅ Successfully uploaded {count} feedback items!")
-                                st.info(f"**Feedback ID:** `{feedback_id}`")
-
-                                # Clear upload data
-                                clear_upload_data()
-
-                                st.balloons()
-
-                            else:
-                                st.error("Upload failed. Please try again.")
-
-                    except Exception as e:
-                        st.error(f"Error uploading feedback: {str(e)}")
-
             else:
                 st.error("No valid feedback found. Please check your input.")
+
+    # Upload button (if data is validated)
+    if st.session_state.upload_data.get('validated') and st.session_state.upload_data.get('method') == 'text':
+        st.markdown("---")
+        st.markdown("### Ready to Upload")
+
+        feedback_list = st.session_state.upload_data['feedback']
+        metadata_list = st.session_state.upload_data['metadata']
+
+        st.markdown(create_upload_summary(
+            len(feedback_list),
+            any(metadata_list),
+            list(metadata_list[0].keys()) if metadata_list and metadata_list[0] else None
+        ))
+
+        if st.button("📤 Upload to System", key="text_upload", type="primary", use_container_width=True):
+            try:
+                api_client = st.session_state.api_client
+
+                with st.spinner("Uploading feedback..."):
+                    response = api_client.upload_feedback(
+                        feedback=feedback_list,
+                        metadata=metadata_list if any(metadata_list) else None
+                    )
+
+                    if response.get('status') == 'success':
+                        feedback_id = response.get('feedback_id')
+                        count = response.get('count')
+                        timestamp = response.get('timestamp')
+
+                        # Add to session state
+                        add_uploaded_feedback(feedback_id, count, timestamp)
+
+                        st.success(f"✅ Successfully uploaded {count} feedback items!")
+                        st.info(f"**Feedback ID:** `{feedback_id}`")
+                        st.caption(f"Go to the **Analysis** page to process this feedback.")
+
+                        # Clear upload data
+                        clear_upload_data()
+
+                        st.balloons()
+
+                    else:
+                        st.error("Upload failed. Please try again.")
+
+            except Exception as e:
+                st.error(f"Error uploading feedback: {str(e)}")
 
 # ====================
 # TAB 2: CSV Upload
@@ -236,6 +249,7 @@ with tab2:
 
                         st.success(f"✅ Successfully uploaded {count} feedback items!")
                         st.info(f"**Feedback ID:** `{feedback_id}`")
+                        st.caption(f"Go to the **Analysis** page to process this feedback.")
 
                         # Clear upload data
                         clear_upload_data()
@@ -362,6 +376,7 @@ with tab3:
 
                         st.success(f"✅ Successfully uploaded {count} feedback items!")
                         st.info(f"**Feedback ID:** `{feedback_id}`")
+                        st.caption(f"Go to the **Analysis** page to process this feedback.")
 
                         # Clear upload data
                         clear_upload_data()
@@ -383,4 +398,13 @@ st.info("""
 - CSV files should have a header row
 - JSON files must be a valid list (array)
 - Maximum file size is 200MB
+- After uploading, go to the **Analysis** page to process your feedback
 """)
+
+# Debug info (can remove in production)
+if st.checkbox("🔧 Show Debug Info"):
+    st.json({
+        "uploaded_feedback_count": len(st.session_state.uploaded_feedback_ids),
+        "uploaded_feedback_ids": st.session_state.uploaded_feedback_ids,
+        "upload_data_validated": st.session_state.upload_data.get('validated', False)
+    })
