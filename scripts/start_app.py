@@ -104,11 +104,9 @@ def main():
 
     api_process = subprocess.Popen(
         [python_exe, "-m", "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"],
-        cwd=project_root,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
+        cwd=project_root
     )
+
 
     # Wait for API to be ready
     if not check_api_health():
