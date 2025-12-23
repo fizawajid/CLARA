@@ -518,3 +518,57 @@ async def get_aggregated_emotion_history(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}",
         )
+
+
+@router.get(
+    "/history/analyses",
+    response_model=Dict,
+    summary="Get Full Analysis History",
+    description="Get historical analysis results (emotions + topics) for the current user",
+)
+async def get_full_analysis_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = 20
+) -> Dict:
+    """
+    Get full analysis history for current user.
+    Returns emotion_scores and topic_results for each analysis.
+    """
+    logger.info(f"Retrieving full analysis history for user: {current_user.username}")
+
+    try:
+        from src.db.models import AnalysisResult, FeedbackBatch
+
+        analyses = db.query(AnalysisResult).filter(
+            AnalysisResult.user_id == current_user.id
+        ).order_by(AnalysisResult.created_at.desc()).limit(limit).all()
+
+        history = []
+        for analysis in analyses:
+            batch = db.query(FeedbackBatch).filter(FeedbackBatch.id == analysis.feedback_batch_id).first()
+
+            history.append({
+                "analysis_id": analysis.id,
+                "feedback_batch_id": analysis.feedback_batch_id,
+                "batch_name": batch.name if batch else None,
+                "created_at": analysis.created_at.isoformat(),
+                "emotion_scores": analysis.emotion_scores or {},
+                "topic_results": analysis.topic_results or {},
+                "summary": analysis.summary,
+                "feedback_count": batch.total_count if batch else 0,
+            })
+
+        return {
+            "success": True,
+            "count": len(history),
+            "history": history,
+            "user_id": current_user.id,
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting full analysis history: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}",
+        )

@@ -48,6 +48,70 @@ def initialize_session_state():
     if 'last_stats_fetch' not in st.session_state:
         st.session_state.last_stats_fetch = None
 
+    # If user is authenticated, attempt to populate previous uploads and analyses
+    try:
+        if hasattr(st, 'session_state') and st.session_state.get('access_token'):
+            api_client = st.session_state.api_client
+
+            # Fetch system statistics and cache
+            try:
+                stats_resp = api_client.get_statistics()
+                if isinstance(stats_resp, dict) and stats_resp.get('success'):
+                    st.session_state.system_stats = stats_resp.get('statistics')
+                    st.session_state.last_stats_fetch = datetime.now()
+            except Exception:
+                # ignore network/auth errors during init
+                pass
+
+            # Fetch full analysis history (emotions + topics) to populate analysis_history and uploaded_feedback_ids
+            try:
+                history_resp = api_client.get_analysis_history(limit=20)
+                if isinstance(history_resp, dict) and history_resp.get('success'):
+                    history = history_resp.get('history', [])
+                    # Populate analysis_history from history
+                    for item in reversed(history):
+                        feedback_id = item.get('feedback_batch_id') or item.get('analysis_id')
+                        analysis_record = {
+                            'feedback_id': feedback_id,
+                            'timestamp': item.get('created_at'),
+                            'results': {
+                                'emotions': item.get('emotion_scores', {}),
+                                'topics': item.get('topic_results', {}),
+                                'report': {
+                                    'summary': item.get('summary')
+                                }
+                            },
+                            'metadata': {
+                                'batch_name': item.get('batch_name'),
+                                'feedback_count': item.get('feedback_count', 0)
+                            }
+                        }
+
+                        # Avoid duplicates
+                        existing = False
+                        for a in st.session_state.analysis_history:
+                            if a.get('feedback_id') == analysis_record['feedback_id']:
+                                existing = True
+                                break
+                        if not existing:
+                            st.session_state.analysis_history.append(analysis_record)
+
+                        # Also add to uploaded feedback list if not present
+                        fb_exists = any(f.get('feedback_id') == analysis_record['feedback_id'] for f in st.session_state.uploaded_feedback_ids)
+                        if not fb_exists:
+                            st.session_state.uploaded_feedback_ids.append({
+                                'feedback_id': analysis_record['feedback_id'],
+                                'count': analysis_record['metadata'].get('feedback_count', 0),
+                                'timestamp': analysis_record['timestamp']
+                            })
+
+            except Exception:
+                # fallback: ignore failures here as well
+                pass
+    except Exception:
+        # Keep session initialization resilient
+        pass
+
 
 def add_uploaded_feedback(feedback_id: str, count: int, timestamp: str = None):
     """
