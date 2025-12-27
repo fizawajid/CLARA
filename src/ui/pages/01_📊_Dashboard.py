@@ -130,7 +130,7 @@ if latest_analysis:
 
     results = latest_analysis['results']
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         st.markdown("**Sentiment Distribution**")
@@ -149,5 +149,95 @@ if latest_analysis:
                     keywords = topic.get('keywords', [])[:3]
                     count = topic.get('count', 0)
                     st.caption(f"**Topic {topic['topic_id']}:** {', '.join(keywords)} ({count} docs)")
+
+    with col3:
+        st.markdown("**Aspect Highlights**")
+        if 'aspects' in results and results['aspects']:
+            aspects = results['aspects'].get('aspects', [])
+            if aspects:
+                # Show top 2 aspects by mention count
+                sorted_aspects = sorted(aspects, key=lambda x: x.get('mention_count', 0), reverse=True)
+                for aspect in sorted_aspects[:2]:
+                    name = aspect['aspect'].upper()
+                    mentions = aspect.get('mention_count', 0)
+                    priority = aspect.get('priority', 'LOW')
+                    emoji = {'HIGH': '🔴', 'MEDIUM': '🟡', 'LOW': '🟢'}
+                    st.caption(f"{emoji[priority]} **{name}:** {mentions} mentions")
+            else:
+                st.caption("No aspects detected")
+        else:
+            st.caption("Aspect analysis not available")
+
+# ====================
+# Aspect Analytics Summary (New Section)
+# ====================
+st.markdown("---")
+st.subheader("🎯 Aspect Analytics Overview")
+
+try:
+    from src.ui.components.api_client import get_api_client
+    api_client = get_api_client()
+
+    # Try to fetch aspect summary
+    if st.session_state.get('access_token'):
+        try:
+            aspect_summary = api_client.get_aspect_summary(days=30)
+
+            if aspect_summary and 'aspects' in aspect_summary:
+                aspects = aspect_summary['aspects']
+
+                if aspects:
+                    st.markdown("**Last 30 Days - Aspect Performance**")
+
+                    # Show top 3 positive and top 3 negative aspects
+                    # Sort by sentiment score
+                    sorted_by_positive = sorted(
+                        aspects,
+                        key=lambda x: x.get('sentiment_breakdown', {}).get('positive', 0),
+                        reverse=True
+                    )
+
+                    sorted_by_negative = sorted(
+                        aspects,
+                        key=lambda x: x.get('sentiment_breakdown', {}).get('negative', 0),
+                        reverse=True
+                    )
+
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.success("**✅ Top Performing Aspects:**")
+                        for aspect in sorted_by_positive[:3]:
+                            name = aspect['aspect'].upper()
+                            pos = aspect.get('sentiment_breakdown', {}).get('positive', 0)
+                            total = sum(aspect.get('sentiment_breakdown', {}).values())
+                            pct = (pos / total * 100) if total > 0 else 0
+                            st.markdown(f"- {name}: {pct:.0f}% positive")
+
+                    with col2:
+                        st.error("**⚠️ Aspects Needing Attention:**")
+                        for aspect in sorted_by_negative[:3]:
+                            name = aspect['aspect'].upper()
+                            neg = aspect.get('sentiment_breakdown', {}).get('negative', 0)
+                            total = sum(aspect.get('sentiment_breakdown', {}).values())
+                            pct = (neg / total * 100) if total > 0 else 0
+                            if pct > 0:
+                                st.markdown(f"- {name}: {pct:.0f}% negative")
+
+                    # Quick action to view detailed aspects
+                    if st.button("📊 View Detailed Aspect Analytics", use_container_width=True):
+                        st.switch_page("pages/07_🎯_Aspects.py")
+                else:
+                    st.info("No aspect data available for the last 30 days. Upload and analyze feedback to see aspect insights.")
+            else:
+                st.info("No aspect summary available yet. Start analyzing feedback with ABSA enabled!")
+
+        except Exception as e:
+            st.warning("Aspect analytics not available. This feature requires completed analyses with ABSA enabled.")
+    else:
+        st.info("Please log in to view aspect analytics.")
+
+except Exception as e:
+    st.error(f"Could not load aspect analytics: {str(e)}")
 else:
     st.info("Run your first analysis to see insights here!")

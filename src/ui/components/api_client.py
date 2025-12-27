@@ -247,6 +247,38 @@ class APIClient:
         """
         return self._make_request("GET", f"/api/v1/feedback/{feedback_id}")
 
+    def get_aspect_history(
+        self,
+        aspect: Optional[str] = None,
+        limit: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Get aspect-based sentiment analysis history
+
+        Args:
+            aspect: Optional aspect name to filter by
+            limit: Maximum number of history items to return
+
+        Returns:
+            Dict containing aspect analysis history
+        """
+        params = {"limit": limit}
+        if aspect:
+            params["aspect"] = aspect
+        return self._make_request("GET", "/api/v1/history/aspects", params=params)
+
+    def get_aspect_summary(self, days: int = 30) -> Dict[str, Any]:
+        """
+        Get aggregated aspect sentiment summary
+
+        Args:
+            days: Number of days to include in summary (default 30)
+
+        Returns:
+            Dict containing aspect summary with sentiment breakdown and recommendations
+        """
+        return self._make_request("GET", "/api/v1/aspects/summary", params={"days": days})
+
     def check_connection(self) -> bool:
         """
         Check if API server is reachable

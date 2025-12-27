@@ -118,6 +118,38 @@ class AnalysisAgent:
                 f"{absa_results.get('total_mentions', 0)} mentions"
             )
 
+            # Transform aspect dict to list format for frontend compatibility
+            # Backend returns: {'product': {...}, 'price': {...}}
+            # Frontend expects: [{'aspect': 'product', ...}, {'aspect': 'price', ...}]
+
+            if 'aspects' in absa_results and isinstance(absa_results['aspects'], dict):
+                aspects_dict = absa_results['aspects']
+                aspects_list = []
+
+                for aspect_name, aspect_data in aspects_dict.items():
+                    # Add the aspect name as a field
+                    aspect_item = {'aspect': aspect_name}
+                    aspect_item.update(aspect_data)
+
+                    # Normalize priority to uppercase for frontend
+                    if 'priority' in aspect_item:
+                        aspect_item['priority'] = aspect_item['priority'].upper()
+
+                    aspects_list.append(aspect_item)
+
+                # Replace dict with list
+                absa_results['aspects'] = aspects_list
+
+                logger.info(f"Transformed {len(aspects_list)} aspects from dict to list format")
+
+            # Transform summary recommendations for frontend
+            if 'summary' in absa_results and isinstance(absa_results['summary'], dict):
+                summary = absa_results['summary']
+                absa_results['recommendations'] = {
+                    'strengths': summary.get('top_positive_aspects', []),
+                    'improvements': summary.get('top_negative_aspects', [])
+                }
+
             return absa_results
 
     def analyze(
