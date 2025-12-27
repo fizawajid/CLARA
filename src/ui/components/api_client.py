@@ -142,6 +142,30 @@ class APIClient:
         """
         return self._make_request("GET", "/api/v1/statistics")
 
+    def get_emotion_history(self, limit: int = 10) -> Dict[str, Any]:
+        """
+        Get recent emotion analysis history for the current user
+
+        Args:
+            limit: Maximum number of history items to return
+
+        Returns:
+            Dict containing history list
+        """
+        return self._make_request("GET", "/api/v1/history/emotions", params={"limit": limit})
+
+    def get_analysis_history(self, limit: int = 20) -> Dict[str, Any]:
+        """
+        Get recent full analysis history (including topics) for the current user
+
+        Args:
+            limit: Maximum number of history items to return
+
+        Returns:
+            Dict containing history list
+        """
+        return self._make_request("GET", "/api/v1/history/analyses", params={"limit": limit})
+
     def upload_feedback(
         self,
         feedback: List[str],

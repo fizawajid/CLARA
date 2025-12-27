@@ -521,204 +521,53 @@ async def get_aggregated_emotion_history(
 
 
 @router.get(
-    "/history/aspects",
+    "/history/analyses",
     response_model=Dict,
-    summary="Get Aspect Analysis History",
-    description="Retrieve aspect-based sentiment trends over time"
+    summary="Get Full Analysis History",
+    description="Get historical analysis results (emotions + topics) for the current user",
 )
-async def get_aspect_history(
+async def get_full_analysis_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    aspect: Optional[str] = None,
-    limit: int = 10
+    limit: int = 20
 ) -> Dict:
     """
-    Get aspect analysis history for trend tracking.
-
-    Args:
-        current_user: Authenticated user
-        db: Database session
-        aspect: Optional filter by specific aspect
-        limit: Maximum number of results (default: 10)
-
-    Returns:
-        Dict: Historical aspect analysis results
-
-    Raises:
-        HTTPException: If retrieval fails
+    Get full analysis history for current user.
+    Returns emotion_scores and topic_results for each analysis.
     """
-    logger.info(f"Retrieving aspect history for user: {current_user.username}")
+    logger.info(f"Retrieving full analysis history for user: {current_user.username}")
 
     try:
         from src.db.models import AnalysisResult, FeedbackBatch
 
-        # Get analysis results with aspect data
         analyses = db.query(AnalysisResult).filter(
-            AnalysisResult.user_id == current_user.id,
-            AnalysisResult.aspect_results.isnot(None)
-        ).order_by(
-            AnalysisResult.created_at.desc()
-        ).limit(limit).all()
+            AnalysisResult.user_id == current_user.id
+        ).order_by(AnalysisResult.created_at.desc()).limit(limit).all()
 
         history = []
         for analysis in analyses:
-            aspect_data = analysis.aspect_results or {}
-            aspects = aspect_data.get("aspects", {})
-
-            # Filter by specific aspect if requested
-            if aspect and aspect not in aspects:
-                continue
-
-            # Get associated feedback batch
-            batch = db.query(FeedbackBatch).filter(
-                FeedbackBatch.id == analysis.feedback_batch_id
-            ).first()
+            batch = db.query(FeedbackBatch).filter(FeedbackBatch.id == analysis.feedback_batch_id).first()
 
             history.append({
                 "analysis_id": analysis.id,
                 "feedback_batch_id": analysis.feedback_batch_id,
                 "batch_name": batch.name if batch else None,
                 "created_at": analysis.created_at.isoformat(),
-                "aspects": aspects.get(aspect) if aspect else aspects,
-                "summary": aspect_data.get("summary", {}),
-                "feedback_count": batch.total_count if batch else 0
+                "emotion_scores": analysis.emotion_scores or {},
+                "topic_results": analysis.topic_results or {},
+                "summary": analysis.summary,
+                "feedback_count": batch.total_count if batch else 0,
             })
 
         return {
             "success": True,
             "count": len(history),
             "history": history,
-            "aspect_filter": aspect,
-            "user_id": current_user.id
+            "user_id": current_user.id,
         }
 
     except Exception as e:
-        logger.error(f"Error getting aspect history: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}",
-        )
-
-
-@router.get(
-    "/aspects/summary",
-    response_model=Dict,
-    summary="Get Aspect Summary Report",
-    description="Get aggregated aspect sentiment summary across all user's analyses"
-)
-async def get_aspect_summary(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    days: int = 30
-) -> Dict:
-    """
-    Generate comprehensive aspect-based insights report.
-
-    Args:
-        current_user: Authenticated user
-        db: Database session
-        days: Time window in days (default: 30)
-
-    Returns:
-        Dict: Aggregated aspect statistics
-
-    Raises:
-        HTTPException: If retrieval fails
-    """
-    logger.info(f"Retrieving aspect summary for user: {current_user.username}")
-
-    try:
-        from src.db.models import AnalysisResult
-        from datetime import datetime, timedelta
-        from collections import defaultdict
-
-        # Get analyses within time window
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
-
-        analyses = db.query(AnalysisResult).filter(
-            AnalysisResult.user_id == current_user.id,
-            AnalysisResult.aspect_results.isnot(None),
-            AnalysisResult.created_at >= cutoff_date
-        ).all()
-
-        if not analyses:
-            return {
-                "success": True,
-                "message": "No aspect analysis data found",
-                "time_window_days": days,
-                "total_analyses": 0
-            }
-
-        # Aggregate across all analyses
-        aspect_aggregates = defaultdict(lambda: {
-            "positive": 0, "neutral": 0, "negative": 0,
-            "total_mentions": 0, "analyses_count": 0
-        })
-
-        for analysis in analyses:
-            aspect_data = analysis.aspect_results.get("aspects", {})
-            for aspect_name, aspect_stats in aspect_data.items():
-                sentiment_breakdown = aspect_stats.get("sentiment_breakdown", {})
-
-                aspect_aggregates[aspect_name]["positive"] += sentiment_breakdown.get("positive", 0)
-                aspect_aggregates[aspect_name]["neutral"] += sentiment_breakdown.get("neutral", 0)
-                aspect_aggregates[aspect_name]["negative"] += sentiment_breakdown.get("negative", 0)
-                aspect_aggregates[aspect_name]["total_mentions"] += aspect_stats.get("mention_count", 0)
-                aspect_aggregates[aspect_name]["analyses_count"] += 1
-
-        # Calculate percentages and priorities
-        summary = {}
-        for aspect, stats in aspect_aggregates.items():
-            total = stats["positive"] + stats["neutral"] + stats["negative"]
-            if total == 0:
-                continue
-
-            summary[aspect] = {
-                "sentiment_percentages": {
-                    "positive": round(stats["positive"] / total * 100, 1),
-                    "neutral": round(stats["neutral"] / total * 100, 1),
-                    "negative": round(stats["negative"] / total * 100, 1)
-                },
-                "total_mentions": stats["total_mentions"],
-                "analyses_appearing_in": stats["analyses_count"],
-                "priority_score": round((stats["negative"] / total) * stats["total_mentions"], 2)
-            }
-
-        # Rank by priority
-        ranked_aspects = sorted(
-            summary.items(),
-            key=lambda x: x[1]["priority_score"],
-            reverse=True
-        )
-
-        # Generate recommendations
-        recommendations = []
-        for aspect, stats in ranked_aspects[:10]:
-            negative_pct = stats["sentiment_percentages"]["negative"]
-            if negative_pct > 50:
-                priority = "HIGH" if negative_pct > 60 else "MEDIUM"
-                recommendations.append({
-                    "priority": priority,
-                    "aspect": aspect,
-                    "action": f"Address {aspect} issues immediately",
-                    "negative_percentage": negative_pct,
-                    "mention_count": stats["total_mentions"]
-                })
-
-        return {
-            "success": True,
-            "time_window_days": days,
-            "total_analyses": len(analyses),
-            "aspects_found": len(summary),
-            "aspect_summary": dict(ranked_aspects),
-            "top_positive": [a for a, s in ranked_aspects if s["sentiment_percentages"]["positive"] > 70][:5],
-            "top_negative": [a for a, s in ranked_aspects if s["sentiment_percentages"]["negative"] > 50][:5],
-            "recommendations": recommendations,
-            "user_id": current_user.id
-        }
-
-    except Exception as e:
-        logger.error(f"Error generating aspect summary: {str(e)}", exc_info=True)
+        logger.error(f"Error getting full analysis history: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}",
