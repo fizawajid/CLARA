@@ -6,6 +6,7 @@ from src.services.nlp_processors import (
     get_emotion_analyzer,
     get_topic_modeler,
 )
+from src.services.absa_processor import get_absa_analyzer
 from src.utils.config import get_config
 from src.utils.logging_config import LogExecutionTime, get_logger
 
@@ -13,14 +14,15 @@ logger = get_logger(__name__)
 
 
 class AnalysisAgent:
-    """Agent responsible for emotion analysis and topic modeling."""
+    """Agent responsible for emotion analysis, topic modeling, and ABSA."""
 
     def __init__(self):
         """Initialize Analysis Agent."""
         self.config = get_config()
         self.emotion_analyzer = get_emotion_analyzer()
         self.topic_modeler = get_topic_modeler()
-        logger.info("Analysis Agent initialized")
+        self.absa_analyzer = get_absa_analyzer()
+        logger.info("Analysis Agent initialized with ABSA support")
 
     def analyze_emotions(self, texts: List[str]) -> Dict:
         """
@@ -95,19 +97,44 @@ class AnalysisAgent:
 
             return topics_result
 
+    def analyze_aspects(self, texts: List[str]) -> Dict:
+        """
+        Perform aspect-based sentiment analysis.
+
+        Args:
+            texts: List of text documents
+
+        Returns:
+            Dict: ABSA results with aspect sentiments and aggregations
+        """
+        logger.info(f"Analyzing aspects for {len(texts)} texts")
+
+        with LogExecutionTime(logger, "Aspect-based sentiment analysis"):
+            # Perform ABSA
+            absa_results = self.absa_analyzer.analyze_batch(texts)
+
+            logger.info(
+                f"ABSA complete: {absa_results.get('total_aspects', 0)} aspects found, "
+                f"{absa_results.get('total_mentions', 0)} mentions"
+            )
+
+            return absa_results
+
     def analyze(
         self,
         texts: List[str],
         include_topics: bool = True,
         include_emotions: bool = True,
+        include_absa: bool = True,
     ) -> Dict:
         """
-        Perform complete analysis (emotions + topics).
+        Perform complete analysis (emotions + topics + ABSA).
 
         Args:
             texts: List of text documents
             include_topics: Whether to include topic modeling
             include_emotions: Whether to include emotion analysis
+            include_absa: Whether to include aspect-based sentiment analysis
 
         Returns:
             Dict: Complete analysis results
@@ -141,6 +168,12 @@ class AnalysisAgent:
                 "num_topics": 0,
                 "message": "Insufficient texts for topic modeling",
             }
+
+        # Aspect-based sentiment analysis
+        if include_absa:
+            absa_results = self.analyze_aspects(texts)
+            results["aspects"] = absa_results
+            results["analysis_performed"].append("absa")
 
         logger.info(
             f"Complete analysis finished: {', '.join(results['analysis_performed'])}"
@@ -223,6 +256,35 @@ class AnalysisAgent:
                     insights.append(
                         f"Most discussed theme: {keywords} ({top_topic['count']} mentions)"
                     )
+
+        # ABSA insights
+        if "aspects" in analysis_results:
+            aspects_data = analysis_results["aspects"]
+            aspects = aspects_data.get("aspects", {})
+            summary = aspects_data.get("summary", {})
+
+            if aspects:
+                insights.append(f"Analyzed {len(aspects)} distinct aspects across feedback")
+
+                # Highlight top positive aspects
+                top_positive = summary.get("top_positive_aspects", [])
+                if top_positive:
+                    insights.append(f"Top strengths: {', '.join(top_positive[:3])}")
+
+                # Highlight top negative aspects
+                top_negative = summary.get("top_negative_aspects", [])
+                if top_negative:
+                    insights.append(f"Areas needing attention: {', '.join(top_negative[:3])}")
+
+                # Priority recommendations
+                recommendations = summary.get("priority_recommendations", [])
+                if recommendations:
+                    high_priority = [r for r in recommendations if r["priority"] == "HIGH"]
+                    if high_priority:
+                        insights.append(
+                            f"URGENT: {len(high_priority)} high-priority issue(s) detected - "
+                            f"review {high_priority[0]['aspect']} immediately"
+                        )
 
         return insights
 

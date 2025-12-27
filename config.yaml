@@ -58,3 +58,41 @@ logging:
   log_file: "./logs/app.log"
   max_file_size: 10485760  # 10MB
   backup_count: 5
+
+# Aspect-Based Sentiment Analysis Configuration
+absa:
+  enabled: true
+
+  # Aspect extraction settings
+  extraction:
+    use_predefined: true  # Use predefined aspect categories
+    use_discovery: true   # Enable automatic aspect discovery
+    min_aspect_mentions: 1  # Minimum mentions to consider aspect
+    max_aspects_per_feedback: 10
+
+  # Predefined aspect categories (customizable per business domain)
+  aspect_categories:
+    product: ["quality", "product", "item", "material", "build", "features"]
+    price: ["price", "cost", "value", "expensive", "cheap", "affordable"]
+    delivery: ["delivery", "shipping", "logistics", "arrival", "package"]
+    service: ["service", "support", "customer service", "help", "assistance"]
+    usability: ["easy", "difficult", "simple", "complex", "user-friendly", "intuitive"]
+    performance: ["fast", "slow", "performance", "speed", "efficient", "responsive"]
+    design: ["design", "look", "appearance", "aesthetic", "style", "interface"]
+
+  # Sentiment analysis settings
+  sentiment:
+    model: "nlptown/bert-base-multilingual-uncased-sentiment"
+    context_window: 50  # Characters around aspect mention
+    confidence_threshold: 0.6  # Minimum confidence to include
+
+  # Priority calculation
+  priority:
+    weight_negative_sentiment: 0.6
+    weight_mention_count: 0.4
+    high_priority_threshold: 0.7
+
+  # Performance settings
+  batch_size: 32
+  max_length: 512
+  cache_embeddings: true

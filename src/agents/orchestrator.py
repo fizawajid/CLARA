@@ -54,6 +54,7 @@ class AgentOrchestrator:
         include_summary = options.get("include_summary", True)
         include_topics = options.get("include_topics", True)
         include_rag = options.get("include_rag", False)
+        include_absa = options.get("include_absa", True)  # ABSA enabled by default
 
         try:
             with LogExecutionTime(logger, "Complete feedback processing"):
@@ -80,12 +81,13 @@ class AgentOrchestrator:
 
                 logger.info(f"Ingestion complete: {len(cleaned_texts)} valid texts")
 
-                # Step 2: Analysis (Emotions + Topics)
-                logger.info("Step 2/4: Analysis (Emotions + Topics)")
+                # Step 2: Analysis (Emotions + Topics + ABSA)
+                logger.info(f"Step 2/4: Analysis (Emotions + Topics + {'ABSA' if include_absa else 'no ABSA'})")
                 analysis_result = self.analysis_agent.analyze(
                     texts=cleaned_texts,
                     include_topics=include_topics,
                     include_emotions=True,
+                    include_absa=include_absa,  # Include ABSA
                 )
 
                 logger.info("Analysis complete")
@@ -137,6 +139,7 @@ class AgentOrchestrator:
                             user_id=user_id,
                             emotion_scores=analysis_result.get("emotions", {}),
                             topic_results=analysis_result.get("topics", {}),
+                            aspect_results=analysis_result.get("aspects", {}),  # Save ABSA results
                             summary=report.get("summary"),
                             key_insights=report.get("key_insights", []),
                             recommendations=report.get("recommendations", []),
@@ -161,6 +164,7 @@ class AgentOrchestrator:
                     "status": "completed",
                     "emotions": analysis_result.get("emotions", {}),
                     "topics": analysis_result.get("topics", {}),
+                    "aspects": analysis_result.get("aspects", {}),  # Include ABSA results
                     "report": report,
                     "statistics": {
                         "total_submitted": len(feedback),
@@ -222,6 +226,7 @@ class AgentOrchestrator:
                 texts=texts,
                 include_topics=options.get("include_topics", True),
                 include_emotions=True,
+                include_absa=options.get("include_absa", True),  # Include ABSA
             )
 
             # Generate report
@@ -249,6 +254,7 @@ class AgentOrchestrator:
                         user_id=user_id,
                         emotion_scores=analysis_result.get("emotions", {}),
                         topic_results=analysis_result.get("topics", {}),
+                        aspect_results=analysis_result.get("aspects", {}),  # Save ABSA results
                         summary=report.get("summary"),
                         key_insights=report.get("key_insights", []),
                         recommendations=report.get("recommendations", []),
@@ -272,6 +278,7 @@ class AgentOrchestrator:
                 "status": "completed",
                 "emotions": analysis_result.get("emotions", {}),
                 "topics": analysis_result.get("topics", {}),
+                "aspects": analysis_result.get("aspects", {}),  # Include ABSA results
                 "report": report,
             }
 

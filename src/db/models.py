@@ -80,6 +80,7 @@ class AnalysisResult(Base):
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     emotion_scores = Column(JSON, nullable=True)  # Stores full emotion analysis
     topic_results = Column(JSON, nullable=True)  # Stores topic modeling results
+    aspect_results = Column(JSON, nullable=True)  # Stores ABSA results (NEW)
     summary = Column(Text, nullable=True)
     key_insights = Column(JSON, nullable=True)
     recommendations = Column(JSON, nullable=True)
