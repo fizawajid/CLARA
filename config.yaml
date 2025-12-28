@@ -31,7 +31,7 @@ agents:
 
 # NLP Processing
 nlp:
-  min_topic_size: 5
+  min_topic_size: 2  # Lowered from 5 to work with small datasets
   max_topics: 10
   sentiment_threshold: 0.05
   emotion_threshold: 0.15  # Minimum score to consider emotion present

@@ -327,28 +327,60 @@ class TopicModeler:
 
         logger.info(f"Initializing BERTopic with model: {self.embedding_model}")
 
+        # Initialize CountVectorizer with stopwords filtering
+        from sklearn.feature_extraction.text import CountVectorizer
+        from umap import UMAP
+        from hdbscan import HDBSCAN
+
+        self.vectorizer_model = CountVectorizer(
+            stop_words='english',  # Remove English stopwords
+            min_df=1,  # Minimum document frequency
+            ngram_range=(1, 2),  # Use unigrams and bigrams
+            max_features=1000  # Limit vocabulary size
+        )
+
+        # UMAP for dimensionality reduction (optimized for small datasets)
+        self.umap_model = UMAP(
+            n_neighbors=3,  # Lower for small datasets (min 2, default 15)
+            n_components=5,  # Dimensions to reduce to
+            min_dist=0.0,  # Tighter clusters
+            metric='cosine',
+            random_state=42
+        )
+
+        # HDBSCAN for clustering (more lenient for small datasets)
+        self.hdbscan_model = HDBSCAN(
+            min_cluster_size=2,  # Same as min_topic_size
+            min_samples=1,  # More lenient (allows more clusters)
+            metric='euclidean',
+            cluster_selection_method='eom',  # Excess of mass
+            prediction_data=True
+        )
+
         # Initialize BERTopic with custom settings
         self.model = BERTopic(
             embedding_model=self.embedding_model,
-            min_topic_size=self.min_topic_size,
+            umap_model=self.umap_model,
+            hdbscan_model=self.hdbscan_model,
+            vectorizer_model=self.vectorizer_model,
             nr_topics=self.max_topics,
             verbose=False,
         )
 
         self.is_fitted = False
-        logger.info("BERTopic topic modeler ready")
+        logger.info("BERTopic topic modeler ready with stopwords filtering")
 
     def extract_topics(
         self,
         texts: List[str],
-        min_texts: int = 10,
+        min_texts: int = 3,  # Lowered from 10 to work with small datasets
     ) -> Dict:
         """
         Extract topics from texts using BERTopic.
 
         Args:
             texts: List of input texts
-            min_texts: Minimum number of texts required
+            min_texts: Minimum number of texts required (default 3)
 
         Returns:
             Dict: Topics with keywords and document assignments
@@ -359,6 +391,7 @@ class TopicModeler:
                 "topics": [],
                 "topic_assignments": [-1] * len(texts),
                 "topic_info": [],
+                "num_topics": 0,
             }
 
         try:
@@ -379,14 +412,19 @@ class TopicModeler:
 
                 topic_words = self.model.get_topic(topic_id)
                 if topic_words:
+                    # Get representative documents for this topic
+                    topic_docs_indices = [i for i, t in enumerate(topics) if t == topic_id]
+                    representative_docs = [texts[i] for i in topic_docs_indices[:3]]  # Get first 3 docs
+
                     topic_list.append({
                         "topic_id": int(topic_id),
                         "keywords": [word for word, _ in topic_words[:10]],
                         "scores": [float(score) for _, score in topic_words[:10]],
                         "count": int(topic_info[topic_info["Topic"] == topic_id]["Count"].values[0]),
+                        "representative_docs": representative_docs,  # Added representative docs
                     })
 
-            logger.info(f"Extracted {len(topic_list)} topics")
+            logger.info(f"Extracted {len(topic_list)} topics with representative documents")
 
             return {
                 "topics": topic_list,

@@ -186,19 +186,19 @@ class AnalysisAgent:
             results["emotion_labels"] = emotion_results["emotion_labels"]
             results["analysis_performed"].append("emotions")
 
-        # Topic modeling
-        if include_topics and len(texts) >= 10:
+        # Topic modeling (lowered threshold to 3 for small datasets)
+        if include_topics and len(texts) >= 3:
             topic_results = self.extract_topics(texts)
             results["topics"] = topic_results
             results["analysis_performed"].append("topics")
         elif include_topics:
             logger.warning(
-                f"Skipping topic modeling: insufficient texts ({len(texts)} < 10)"
+                f"Skipping topic modeling: insufficient texts ({len(texts)} < 3)"
             )
             results["topics"] = {
                 "topics": [],
                 "num_topics": 0,
-                "message": "Insufficient texts for topic modeling",
+                "message": "Topic modeling requires at least 3 feedback items for meaningful results",
             }
 
         # Aspect-based sentiment analysis
