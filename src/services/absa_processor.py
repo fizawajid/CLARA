@@ -37,8 +37,8 @@ class AspectBasedSentimentAnalyzer:
         }
 
         # Configuration parameters
-        self.context_window = 50  # Characters around aspect mention
-        self.confidence_threshold = 0.6
+        self.context_window = 100  # Characters around aspect mention (increased for better context)
+        self.confidence_threshold = 0.5  # Lowered threshold for better sensitivity
         self.min_aspect_mentions = 1
 
         logger.info("Initializing ABSA analyzer...")
@@ -147,16 +147,25 @@ class AspectBasedSentimentAnalyzer:
             for chunk in doc.noun_chunks:
                 # Filter: must be 1-3 words, not too generic
                 if 1 <= len(chunk.text.split()) <= 3:
-                    # Skip very generic words
-                    generic_words = {'it', 'this', 'that', 'these', 'those', 'thing', 'something'}
-                    if chunk.text.lower() not in generic_words:
-                        discovered.append({
-                            "aspect": chunk.text.lower(),
-                            "term": chunk.text,
-                            "context": self._extract_context_window(text, chunk.start_char, self.context_window),
-                            "position": chunk.start_char,
-                            "source": "discovered"
-                        })
+                    # Skip very generic words and pronouns
+                    generic_words = {
+                        'it', 'this', 'that', 'these', 'those', 'thing', 'something',
+                        'i', 'you', 'we', 'they', 'he', 'she', 'which', 'who', 'what',
+                        'the issue', 'the problem', 'the thing', 'everything', 'anything'
+                    }
+                    chunk_lower = chunk.text.lower().strip()
+
+                    # Skip if generic or too short
+                    if chunk_lower not in generic_words and len(chunk_lower) > 1:
+                        # Skip single letters and pure pronouns
+                        if not (len(chunk_lower) == 1 or chunk.root.pos_ == 'PRON'):
+                            discovered.append({
+                                "aspect": chunk_lower,
+                                "term": chunk.text,
+                                "context": self._extract_context_window(text, chunk.start_char, self.context_window),
+                                "position": chunk.start_char,
+                                "source": "discovered"
+                            })
 
             return discovered
 
@@ -379,15 +388,18 @@ class AspectBasedSentimentAnalyzer:
 
             # Calculate priority score (negative % × mention count)
             negative_pct = stats["negative"] / total
+            positive_pct = stats["positive"] / total
             priority_score = negative_pct * total
 
-            # Determine priority level
-            if negative_pct > 0.6 and total >= 5:
+            # Determine priority level (more sensitive for small datasets)
+            if negative_pct > 0.7:  # 70%+ negative
                 priority = "high"
-            elif negative_pct > 0.4 and total >= 3:
+            elif negative_pct > 0.5 and total >= 2:  # 50%+ negative with multiple mentions
+                priority = "high"
+            elif negative_pct > 0.3:  # 30%+ negative
                 priority = "medium"
-            elif negative_pct > 0.5:
-                priority = "medium"
+            elif negative_pct == 0 and positive_pct > 0.5:  # Pure positive
+                priority = "low"
             else:
                 priority = "low"
 
